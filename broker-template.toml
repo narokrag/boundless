@@ -134,7 +134,7 @@ bonsai_r0_zkvm_ver = "2.1.0"
 # Provides a little durability for transient failures.
 status_poll_retry_count = 3
 # Polling interval to monitor proving status (in millisecs)
-status_poll_ms = 800
+status_poll_ms = 450
 # Number of retries to query a prover backend for on failures.
 #
 # Used for API requests to a prover backend, creating sessions, preflighting, uploading images, etc.
@@ -171,14 +171,14 @@ proof_retry_sleep_ms = 500
 
 [batcher]
 # Max batch duration before publishing (in seconds)
-batch_max_time = 1000
+batch_max_time = 2000
 # Batch size (in proofs) before publishing
 min_batch_size = 1
 # Batch blocktime buffer
 #
 # Number of seconds before the lowest block deadline in the order batch
 # to flush the batch. This should be approximately snark_proving_time * 2
-block_deadline_buffer_secs = 180
+block_deadline_buffer_secs = 60
 # Timeout, in seconds for transaction confirmations
 txn_timeout = 45
 # Use the single TXN submission that batches submit_merkle / fulfill_batch into
