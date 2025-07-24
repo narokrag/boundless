@@ -4,7 +4,7 @@
 # This price is multiplied the number of mega-cycles (i.e. million RISC-V cycles) that the requested
 # execution took, as calculated by running the request in preflight. This is one of the inputs to
 # decide the minimum price to accept for a request.
-mcycle_price = "0.0000005"
+mcycle_price = "0.000000000000000111"
 # Mega-cycle price, denominated in the Boundless staking token.
 #
 # Similar to the mcycle_price option above. This is used to determine the minimum price to accept an
@@ -14,15 +14,17 @@ mcycle_price_stake_token = "0.0001"
 #
 # If enabled, the order will be preflighted without constraints.
 priority_requestor_addresses = [
-	"0x48268bE6235A23eb7b67356469362869D5d0293f",
-	"0x0466ACfc0F27bBA9fBB7A8508f576527e81E83Bd",
+    "0x2546c553d857d20658ece248f7c7d0861a240681",
+    "0xc2db89b2bd434ceac6c74fbc0b2ad3a280e66db0",
+    "0x734dF7809c4ef94Da037449C287166D114503198",
+    "0x3Ee7d9175eC8BB9e16e8FD3AbDEF5a354b247528",
 ]
 # Estimated peak performance of the proving cluster, in kHz.
 #
 # Used to estimate proving capacity and accept only as much work as the prover can handle. Estimates
 # can be derived from benchmarking using Bento CLI or from data based on fulfilling market orders.
 # For more information, see https://docs.beboundless.xyz/provers/broker#benchmarking-bento
-peak_prove_khz = 100
+peak_prove_khz = 300
 # Optional max cycles (in mcycles)
 #
 # Orders over this max_cycles will be skipped after preflight
@@ -37,9 +39,9 @@ max_journal_bytes = 10000
 # 
 # If there is not enough time left before the deadline, the prover may not be able to complete
 # proving of the request and finalize the batch for publishing before expiration.
-min_deadline = 300
+min_deadline = 200
 # On startup, the number of blocks to look back for possible open orders.
-lookback_blocks = 300 # 300 blocks ~ 1 hour @ 12s block times
+lookback_blocks = 100 # 300 blocks ~ 1 hour @ 12s block times
 # Max stake amount, denominated in the Boundless staking token.
 #
 # Requests that require a higher stake than this will not be considered.
@@ -51,7 +53,7 @@ max_file_size = 50_000_000
 # Max concurrent locks
 #
 # Maximum number of concurrent proofs that can be processed at once
-max_concurrent_proofs = 2
+max_concurrent_proofs = 1
 # Maximum number of orders to concurrently work on pricing
 #
 # Used to limit pricing tasks spawned to prevent overwhelming the system
@@ -77,7 +79,7 @@ max_critical_task_retries = 10
 # Optional allow list for customer address.
 #
 # If enabled, all requests from clients not in the allow list are skipped.
-#allow_client_addresses = []
+allow_client_addresses = ["0x2546c553d857d20658ece248f7c7d0861a240681","0xc2db89b2bd434ceac6c74fbc0b2ad3a280e66db0"]
 # Optional deny list for requestor address.
 #
 # If enabled, all requests from clients in the deny list are skipped.
@@ -87,7 +89,7 @@ max_critical_task_retries = 10
 # Optional additional gas to add to the transaction for lockinRequest, good
 # for increasing the priority if competing with multiple provers during the
 # same block
-#lockin_priority_gas = 100
+lockin_priority_gas = 4000
 # Optional balance warning threshold (in native token)
 #
 # If the submitter balance drops below this the broker will issue warning logs
@@ -107,7 +109,7 @@ stake_balance_error_threshold = "5"
 # Optional cache directory for storing downloaded images and inputs
 #
 # If not set, files will be re-downloaded every time
-#cache_dir = "./cache"
+cache_dir = "./cache"
 # Gas estimate for lockin call
 #
 # Used for estimating the gas costs associated with an order during pricing. If not set a
@@ -132,7 +134,7 @@ bonsai_r0_zkvm_ver = "2.1.0"
 # Provides a little durability for transient failures.
 status_poll_retry_count = 3
 # Polling interval to monitor proving status (in millisecs)
-status_poll_ms = 1000
+status_poll_ms = 800
 # Number of retries to query a prover backend for on failures.
 #
 # Used for API requests to a prover backend, creating sessions, preflighting, uploading images, etc.
