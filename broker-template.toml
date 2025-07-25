@@ -14,17 +14,14 @@ mcycle_price_stake_token = "0.0001"
 #
 # If enabled, the order will be preflighted without constraints.
 priority_requestor_addresses = [
-    "0x2546c553d857d20658ece248f7c7d0861a240681",
-    "0xc2db89b2bd434ceac6c74fbc0b2ad3a280e66db0",
-    "0x734dF7809c4ef94Da037449C287166D114503198",
-    "0x3Ee7d9175eC8BB9e16e8FD3AbDEF5a354b247528",
+    "0x734dF7809c4ef94Da037449C287166D114503198"
 ]
 # Estimated peak performance of the proving cluster, in kHz.
 #
 # Used to estimate proving capacity and accept only as much work as the prover can handle. Estimates
 # can be derived from benchmarking using Bento CLI or from data based on fulfilling market orders.
 # For more information, see https://docs.beboundless.xyz/provers/broker#benchmarking-bento
-peak_prove_khz = 750
+peak_prove_khz = 100
 # Optional max cycles (in mcycles)
 #
 # Orders over this max_cycles will be skipped after preflight
@@ -79,7 +76,7 @@ max_critical_task_retries = 10
 # Optional allow list for customer address.
 #
 # If enabled, all requests from clients not in the allow list are skipped.
-allow_client_addresses = ["0x2546c553d857d20658ece248f7c7d0861a240681","0xc2db89b2bd434ceac6c74fbc0b2ad3a280e66db0"]
+#allow_client_addresses = ["0x2546c553d857d20658ece248f7c7d0861a240681","0xc2db89b2bd434ceac6c74fbc0b2ad3a280e66db0"]
 # Optional deny list for requestor address.
 #
 # If enabled, all requests from clients in the deny list are skipped.
