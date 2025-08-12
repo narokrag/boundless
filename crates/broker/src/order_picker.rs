@@ -389,16 +389,14 @@ where
                 .await
                 .context("Failed to check if request is fulfilled before pricing")?
         {
-            tracing::debug!("Order {order_id} is already fulfilled, skipping");
+            tracing::debug!("✅ 订单 {order_id} 已完成, 跳过处理");
             return Ok(Skip);
         }
 
         // Check that we have both enough staking tokens to stake, and enough gas tokens to lock and fulfil
-        // NOTE: We use the current gas price and a rough heuristic on gas costs. Its possible that
-        // gas prices may go up (or down) by the time its time to fulfill. This does not aim to be
-        // a tight estimate, although improving this estimate will allow for a more profit.
-        let gas_price =
-            self.chain_monitor.current_gas_price().await.context("Failed to get gas price")?;
+        // OPTIMIZATION: Use hardcoded gas price to avoid RPC calls for maximum speed
+        let gas_price = 2_000_000_000u128; // 2 gwei - ultra low cost competitive pricing
+        // Original: self.chain_monitor.current_gas_price().await.context("Failed to get gas price")?;
         let order_gas = if lock_expired {
             // No need to include lock gas if its a lock expired order
             U256::from(
@@ -421,36 +419,44 @@ where
             )
         };
         let order_gas_cost = U256::from(gas_price) * order_gas;
-        let available_gas = self.available_gas_balance().await?;
-        let available_stake = self.available_stake_balance().await?;
-        tracing::debug!(
-            "Estimated {order_gas} gas to {} order {order_id}; {} ether @ {} gwei",
-            if lock_expired { "fulfill" } else { "lock and fulfill" },
-            format_ether(order_gas_cost),
-            format_units(gas_price, "gwei").unwrap()
-        );
-
-        if order_gas_cost > order.request.offer.maxPrice && !lock_expired {
-            // Cannot check the gas cost for lock expired orders where the reward is a fraction of the stake
-            // TODO: This can be added once we have a price feed for the stake token in gas tokens
-            tracing::info!(
-                "Estimated gas cost to lock and fulfill order {order_id}: {} exceeds max price; max price {}",
+        
+        // OPTIMIZATION: Skip balance checks for LockAndFulfill orders to gain speed
+        if order.fulfillment_type == FulfillmentType::LockAndFulfill {
+            tracing::debug!(
+                "⚡ 速度优化: 跳过LockAndFulfill订单 {order_id} 的余额检查; 预估费用 {} ether @ {} gwei",
                 format_ether(order_gas_cost),
-                format_ether(order.request.offer.maxPrice)
+                format_units(gas_price, "gwei").unwrap()
             );
-            return Ok(Skip);
-        }
-
-        if order_gas_cost > available_gas {
-            tracing::warn!("Estimated there will be insufficient gas for order {order_id} after locking and fulfilling pending orders; available_gas {} ether", format_ether(available_gas));
-            return Ok(Skip);
-        }
-
-        if !lock_expired && lockin_stake > available_stake {
-            tracing::warn!(
-                "Insufficient available stake to lock order {order_id}. Requires {lockin_stake}, has {available_stake}"
+        } else {
+            let available_gas = self.available_gas_balance().await?;
+            let available_stake = self.available_stake_balance().await?;
+            tracing::debug!(
+                "Estimated {order_gas} gas to {} order {order_id}; {} ether @ {} gwei",
+                if lock_expired { "fulfill" } else { "lock and fulfill" },
+                format_ether(order_gas_cost),
+                format_units(gas_price, "gwei").unwrap()
             );
-            return Ok(Skip);
+
+            if order_gas_cost > order.request.offer.maxPrice && !lock_expired {
+                tracing::info!(
+                    "Estimated gas cost to lock and fulfill order {order_id}: {} exceeds max price; max price {}",
+                    format_ether(order_gas_cost),
+                    format_ether(order.request.offer.maxPrice)
+                );
+                return Ok(Skip);
+            }
+
+            if order_gas_cost > available_gas {
+                tracing::warn!("Estimated there will be insufficient gas for order {order_id} after locking and fulfilling pending orders; available_gas {} ether", format_ether(available_gas));
+                return Ok(Skip);
+            }
+
+            if !lock_expired && lockin_stake > available_stake {
+                tracing::warn!(
+                    "Insufficient available stake to lock order {order_id}. Requires {lockin_stake}, has {available_stake}"
+                );
+                return Ok(Skip);
+            }
         }
 
         // Calculate exec limit (handles priority requestors and config internally)
@@ -460,9 +466,35 @@ where
             // Exec limit is based on user cycles, and 2 is the minimum number of user cycles for a
             // provable execution.
             // TODO when/if total cycle limit is allowed in future, update this to be total cycle min
-            tracing::info!("Removing order {order_id} because its exec limit is too low");
+            tracing::info!("❌ 移除订单 {order_id} - 执行限制过低");
 
             return Ok(Skip);
+        }
+
+        // OPTIMIZATION: Skip preflight execution for LockAndFulfill orders to gain speed advantage
+        if order.fulfillment_type == FulfillmentType::LockAndFulfill {
+            tracing::debug!(
+                "🚀 速度优化: 跳过LockAndFulfill订单 {order_id} 的预飞行执行, 使用预估周期数: {} (~{} mcycles)",
+                exec_limit_cycles,
+                exec_limit_cycles / 1_000_000
+            );
+
+            // Create a mock ProofResult with estimated values to bypass preflight
+            let mock_proof_result = ProofResult {
+                id: format!("mock-{}", order_id),
+                stats: ExecutorResp {
+                    total_cycles: exec_limit_cycles,
+                    user_cycles: exec_limit_cycles,
+                    segments: 1,
+                    assumption_count: 0,
+                },
+                elapsed_time: 0.0,
+            };
+
+            // Skip journal validation and predicate checks for speed
+            tracing::debug!("⚡ 速度优化: 跳过订单 {order_id} 的日志验证和断言检查");
+            
+            return self.evaluate_order(order, &mock_proof_result, order_gas_cost, lock_expired).await;
         }
 
         tracing::debug!(
@@ -632,7 +664,7 @@ where
         // If a max_mcycle_limit is configured check if the order is over that limit
         let proof_cycles = proof_res.stats.total_cycles;
         if proof_cycles > prove_limit {
-            tracing::info!("Order {order_id} with {proof_cycles} cycles above prove limit from capacity ({prove_limit})");
+            tracing::info!("Order {order_id} max_mcycle_limit check failed req: {proof_cycles} | config: {prove_limit}");
             return Ok(Skip);
         }
 
@@ -648,7 +680,7 @@ where
             self.config.lock_all().context("Failed to read config")?.market.max_journal_bytes;
         if journal.len() > max_journal_bytes {
             tracing::info!(
-                "Order {order_id} journal larger than set limit ({} > {}), skipping",
+                "📋 订单 {order_id} 日志过大 ({} > {}), 跳过处理",
                 journal.len(),
                 max_journal_bytes
             );
@@ -657,7 +689,7 @@ where
 
         // Validate the predicates:
         if !order.request.requirements.predicate.eval(journal.clone()) {
-            tracing::info!("Order {order_id} predicate check failed, skipping");
+            tracing::info!("🔍 订单 {order_id} 断言检查失败, 跳过处理");
             return Ok(Skip);
         }
 
@@ -714,11 +746,18 @@ where
 
         // Skip the order if it will never be worth it
         if mcycle_price_max < config_min_mcycle_price {
-            tracing::debug!("Removing under priced order {order_id}");
+            tracing::debug!("💰 移除低价订单 {order_id} - 价格过低");
             return Ok(Skip);
         }
 
-        let target_timestamp_secs = if mcycle_price_min >= config_min_mcycle_price {
+        // OPTIMIZATION: For LockAndFulfill orders, always lock immediately without waiting for price increases
+        let target_timestamp_secs = if order.fulfillment_type == FulfillmentType::LockAndFulfill {
+            tracing::info!(
+                "💰 速度优化: LockAndFulfill订单 {order_id} - 立即以当前价格锁定 {} ETH",
+                format_ether(U256::from(order.request.offer.minPrice))
+            );
+            0 // Always schedule ASAP for maximum speed
+        } else if mcycle_price_min >= config_min_mcycle_price {
             tracing::info!(
                 "Selecting order {order_id} at price {} - ASAP",
                 format_ether(U256::from(order.request.offer.minPrice))
@@ -811,8 +850,9 @@ where
 
     /// Estimate the total gas tokens reserved to lock and fulfill all pending orders
     async fn gas_balance_reserved(&self) -> Result<U256> {
-        let gas_price =
-            self.chain_monitor.current_gas_price().await.context("Failed to get gas price")?;
+        // OPTIMIZATION: Use hardcoded gas price to avoid RPC calls
+        let gas_price = 2_000_000_000u128; // 2 gwei - ultra low cost competitive pricing
+        // Original: self.chain_monitor.current_gas_price().await.context("Failed to get gas price")?;
         let fulfill_pending_gas = self.estimate_gas_to_fulfill_pending().await?;
         Ok(U256::from(gas_price) * U256::from(fulfill_pending_gas))
     }
@@ -898,7 +938,7 @@ where
             let initial_stake_based_limit =
                 (price.saturating_mul(ONE_MILLION).div_ceil(min_mcycle_price_stake_token))
                     .try_into()
-                    .unwrap_or(u64::MAX);
+                    .context("Failed to convert U256 exec limit to u64")?;
 
             tracing::trace!(
                 "Order {order_id} initial stake based limit: {initial_stake_based_limit}"
@@ -921,7 +961,7 @@ where
                     .saturating_mul(ONE_MILLION)
                     / min_mcycle_price)
                     .try_into()
-                    .unwrap_or(u64::MAX)
+                    .context("Failed to convert U256 exec limit to u64")?
             };
 
             if eth_based_limit > stake_based_limit {
@@ -1437,7 +1477,6 @@ pub(crate) mod tests {
                 boundless_market_address: *boundless_market_address,
                 chain_id,
                 total_cycles: None,
-                cached_id: Default::default(),
             })
         }
 
@@ -1489,7 +1528,6 @@ pub(crate) mod tests {
                 boundless_market_address: *boundless_market_address,
                 chain_id,
                 total_cycles: None,
-                cached_id: Default::default(),
             })
         }
     }
@@ -2421,7 +2459,6 @@ pub(crate) mod tests {
             total_cycles: order1.total_cycles,
             target_timestamp: order1.target_timestamp,
             expire_timestamp: order1.expire_timestamp,
-            cached_id: Default::default(),
         });
 
         assert_eq!(order1.id(), order2.id(), "Both orders should have the same ID");
@@ -2492,9 +2529,12 @@ pub(crate) mod tests {
         ctx.new_order_tx.send(order1).await.unwrap();
 
         // Wait for the order to be processed and check for the "Added" log
-        tokio::time::timeout(MIN_CAPACITY_CHECK_INTERVAL * 2, ctx.priced_orders_rx.recv())
-            .await
-            .unwrap();
+        tokio::time::timeout(
+            MIN_CAPACITY_CHECK_INTERVAL + Duration::from_secs(1),
+            ctx.priced_orders_rx.recv(),
+        )
+        .await
+        .unwrap();
 
         // Check that we logged the task being added
         assert!(logs_contain("Current pricing tasks: ["));

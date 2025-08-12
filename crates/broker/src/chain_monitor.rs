@@ -129,11 +129,9 @@ where
                 .map_err(ChainMonitorErr::UnexpectedErr)
                 .map_err(SupervisorErr::Recover)?;
 
-            let chain_poll_time = NamedChain::try_from(chain_id)
-                .ok()
-                .and_then(|chain| chain.average_blocktime_hint())
-                .map(|block_time| block_time.mul_f32(0.6))
-                .unwrap_or(Duration::from_secs(2));
+            // OPTIMIZATION: Use 1ms interval for maximum speed instead of block-based timing
+            let chain_poll_time = Duration::from_millis(1);
+            // Original: NamedChain::try_from(chain_id).ok().and_then(|chain| chain.average_blocktime_hint()).map(|block_time| block_time.mul_f32(0.6)).unwrap_or(Duration::from_secs(2));
 
             loop {
                 tokio::select! {

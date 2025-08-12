@@ -215,8 +215,16 @@ where
                 _ => FulfillmentType::LockAndFulfill,
             };
 
+            // OPTIMIZATION: Skip non-LockAndFulfill orders for maximum speed
+            if fulfillment_type != FulfillmentType::LockAndFulfill {
+                tracing::debug!(
+                    "🚫 跳过订单 {request_id:x} - 非LockAndFulfill类型: {fulfillment_type:?}",
+                );
+                continue;
+            }
+
             tracing::info!(
-                "Found open order: {request_id:x} with request status: {req_status:?}, preparing to process with fulfillment type: {fulfillment_type:?}",
+                "🎯 发现开放订单: {request_id:x} 状态: {req_status:?}, 准备处理 LockAndFulfill 类型订单",
             );
 
             let new_order = OrderRequest::new(
@@ -246,21 +254,21 @@ where
         cancel_token: CancellationToken,
     ) -> Result<(), MarketMonitorErr> {
         let chain_id = provider.get_chain_id().await.context("Failed to get chain id")?;
+
         let market = BoundlessMarketService::new(market_addr, provider.clone(), Address::ZERO);
+        // TODO: RPC providers can drop filters over time or flush them
+        // we should try and move this to a subscription filter if we have issue with the RPC
+        // dropping filters
 
-        let create_filter = || async {
-            let event = market
-                .instance()
-                .RequestSubmitted_filter()
-                .watch()
-                .await
-                .context("Failed to subscribe to RequestSubmitted event")?;
-            Ok::<_, anyhow::Error>(event.into_stream())
-        };
-
-        let mut stream = create_filter().await?;
+        let event = market
+            .instance()
+            .RequestSubmitted_filter()
+            .watch()
+            .await
+            .context("Failed to subscribe to RequestSubmitted event")?;
         tracing::info!("Subscribed to RequestSubmitted event");
 
+        let mut stream = event.into_stream();
         loop {
             tokio::select! {
                 log_res = stream.next() => {
@@ -284,9 +292,9 @@ where
                             tracing::warn!("Failed to fetch event log: {event_err:?}");
                         }
                         None => {
-                            tracing::warn!("Event stream ended unexpectedly. Recreating subscription...");
-                            stream = create_filter().await?;
-                            tracing::info!("Recreated RequestSubmitted event subscription");
+                            return Err(MarketMonitorErr::EventPollingErr(anyhow::anyhow!(
+                                "Event polling exited, polling failed (possible RPC error)"
+                            )));
                         }
                     }
                 }
@@ -311,20 +319,15 @@ where
     ) -> Result<(), MarketMonitorErr> {
         let market = BoundlessMarketService::new(market_addr, provider.clone(), Address::ZERO);
         let chain_id = provider.get_chain_id().await.context("Failed to get chain id")?;
-
-        let create_filter = || async {
-            let event = market
-                .instance()
-                .RequestLocked_filter()
-                .watch()
-                .await
-                .context("Failed to subscribe to RequestLocked event")?;
-            Ok::<_, anyhow::Error>(event.into_stream())
-        };
-
-        let mut stream = create_filter().await?;
+        let event = market
+            .instance()
+            .RequestLocked_filter()
+            .watch()
+            .await
+            .context("Failed to subscribe to RequestLocked event")?;
         tracing::info!("Subscribed to RequestLocked event");
 
+        let mut stream = event.into_stream();
         loop {
             tokio::select! {
                 log_res = stream.next() => {
@@ -404,9 +407,9 @@ where
                             tracing::warn!("Failed to fetch RequestLocked event log: {event_err:?}");
                         }
                         None => {
-                            tracing::warn!("Event stream ended unexpectedly. Recreating subscription...");
-                            stream = create_filter().await?;
-                            tracing::info!("Recreated event subscription");
+                            return Err(MarketMonitorErr::EventPollingErr(anyhow::anyhow!(
+                                "Event polling exited, polling failed (possible RPC error)",
+                            )));
                         }
                     }
                 }
@@ -426,20 +429,15 @@ where
         cancel_token: CancellationToken,
     ) -> Result<(), MarketMonitorErr> {
         let market = BoundlessMarketService::new(market_addr, provider.clone(), Address::ZERO);
-
-        let create_filter = || async {
-            let event = market
-                .instance()
-                .RequestFulfilled_filter()
-                .watch()
-                .await
-                .context("Failed to subscribe to RequestFulfilled event")?;
-            Ok::<_, anyhow::Error>(event.into_stream())
-        };
-
-        let mut stream = create_filter().await?;
+        let event = market
+            .instance()
+            .RequestFulfilled_filter()
+            .watch()
+            .await
+            .context("Failed to subscribe to RequestFulfilled event")?;
         tracing::info!("Subscribed to RequestFulfilled event");
 
+        let mut stream = event.into_stream();
         loop {
             tokio::select! {
                 log_res = stream.next() => {
@@ -479,9 +477,9 @@ where
                             tracing::warn!("Failed to fetch RequestFulfilled event log: {event_err:?}");
                         }
                         None => {
-                            tracing::warn!("Event stream ended unexpectedly. Recreating subscription...");
-                            stream = create_filter().await?;
-                            tracing::info!("Recreated event subscription");
+                            return Err(MarketMonitorErr::EventPollingErr(anyhow::anyhow!(
+                                "Event polling order fulfillments exited, polling failed (possible RPC error)",
+                            )));
                         }
                     }
                 }
