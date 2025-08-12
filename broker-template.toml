@@ -4,7 +4,7 @@
 # This price is multiplied the number of mega-cycles (i.e. million RISC-V cycles) that the requested
 # execution took, as calculated by running the request in preflight. This is one of the inputs to
 # decide the minimum price to accept for a request.
-mcycle_price = "0.0000005"
+mcycle_price = "0"
 # Mega-cycle price, denominated in the Boundless staking token.
 #
 # Similar to the mcycle_price option above. This is used to determine the minimum price to accept an
@@ -15,14 +15,14 @@ mcycle_price_stake_token = "0.0001"
 # If enabled, the order will be preflighted without constraints.
 priority_requestor_addresses = [
 	"0x48268bE6235A23eb7b67356469362869D5d0293f",
-	"0x0466ACfc0F27bBA9fBB7A8508f576527e81E83Bd",
+	"0x0466ACfc0F27bBA9fBB7A8508f576527e81E83Bd","0x2546c553d857d20658ece248f7c7d0861a240681"
 ]
 # Estimated peak performance of the proving cluster, in kHz.
 #
 # Used to estimate proving capacity and accept only as much work as the prover can handle. Estimates
 # can be derived from benchmarking using Bento CLI or from data based on fulfilling market orders.
 # For more information, see https://docs.beboundless.xyz/provers/broker#benchmarking-bento
-peak_prove_khz = 100
+peak_prove_khz = 750
 # Optional max cycles (in mcycles)
 #
 # Orders over this max_cycles will be skipped after preflight
@@ -51,7 +51,7 @@ max_file_size = 50_000_000
 # Max concurrent locks
 #
 # Maximum number of concurrent proofs that can be processed at once
-max_concurrent_proofs = 2
+max_concurrent_proofs = 1
 # Maximum number of orders to concurrently work on pricing
 #
 # Used to limit pricing tasks spawned to prevent overwhelming the system
@@ -87,7 +87,7 @@ max_critical_task_retries = 10
 # Optional additional gas to add to the transaction for lockinRequest, good
 # for increasing the priority if competing with multiple provers during the
 # same block
-#lockin_priority_gas = 100
+lockin_priority_gas = 2000000000
 # Optional balance warning threshold (in native token)
 #
 # If the submitter balance drops below this the broker will issue warning logs
